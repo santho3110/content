@@ -1,0 +1,670 @@
+Why?
+0:00
+Supabase hired me to build ClippyGPT, their  next-generation doc search where we can ask   our old friend Clippy anything we want about  Supabase and it will answer it. For those  
+0:08
+who haven't heard, OpenAI released ChatGPT, an  insanely capable large language model that aims  
+0:14
+to change the way we interact with computers using  natural language. But for me I'm less interested   in ChatGPT on its own and more interested in  how we can use that technology in our own custom  
+0:24
+applications. This video is going to be all about  this. We'll dive into a new field called Prompt   Engineering and best practices when it comes  to building custom prompts. We'll talk about  
+0:32
+the number one challenge that people face when  they're designing custom prompts, plus a number   of other challenges that we face when we use it  in the real world. Such as: How do we feed GPT-3  
+0:41
+a custom knowledge base that it wasn't trained  on? How do we get past the token limits? How   do you stop GPT-3 from making up wrong answers  or hallucinating? By the way, who is Supabase?  
+0:49
+Supabase is an open source Firebase alternative.  You can use Supabase as basically the backend  
+0:55
+provider for your platform in the same way that  you could use Firebase to do that. The difference   is though, apart from being open source, and the  number one thing I love about Supabase is that  
+1:04
+the entire platform is actually built on Postgres,  one of the leading production grade SQL databases.   And why did Supabase want ClippyGPT? Well like  any good developer focused platform, providing  
+1:14
+high quality documentation is key. And if you  have a big site with a lot of documentation,   how do you make it easy to discover that content?  Up until now Supabase used a third-party tool  
+1:24
+called Algolia as their search service. But that  only returns links back to the documentation, like  
+1:29
+what I would call traditional search. Now that  we have the power of large language models like   GPT-3, let's improve this experience by returning  the answer to the question right then and there.
+1:39
+Okay, we're gonna get right in here. I've zoomed  in my VSCode terminal quite a bit here, so those  
+Let's get started
+1:45
+who are on smaller screens can hopefully see  what I'm doing—hopefully I don't regret this! So,   the way I'm going to go about this is, I'm going  to walk you through the different pieces of code  
+1:54
+that I've already built, and basically show you  what it took to build this thing. And my goal  
+2:00
+is to present this in a way that you can take  these exact same ideas and bring them over to   your application, so you can do the same thing.  So right now, we're just looking at the Supabase  
+2:09
+mono repo. If you actually want to follow along  yourself, Supabase is open source of course,  
+2:14
+as we've talked about, so you can just head  on over to the Supabase GitHub organization,  
+2:19
+and then it's just their first Supabase  project. This is a mono repo, it contains   a couple different projects within it, one of  those projects being the documentation website,  
+2:28
+which is what we're going to focus on today.  And, fun fact, the documentation website is   actually completely built on Next.js,  which, in my opinion, has made a really  
+2:36
+great experience to work with. So I'm going to  split the process I took into three main steps:
+2:43
+Step one, we pre-process the knowledge  base. In this case, for Supabase,  
+2:49
+this would be their documentation, which  we'll find out in a second is all MDX files.   Step two, we're going to store it in a database  and generate a special thing called embeddings  
+3:00
+on them and I'll explain why we're doing  that and what the purpose is there in a   second. And then three, we're going to inject  this content as context into our GPT-3 prompt.  
+3:12
+So, how did I know to go about it this way? Let's  start with the number one challenge people face   when they go to customize GPT-3 using their  own custom knowledge base. Here's the problem:  
+Custom knowledge base
+3:22
+GPT-3 is general purpose. It has been trained  on millions of pieces of text so that it can   understand human language. Sure, it might be  able to answer specific questions based on the  
+3:32
+information that it was trained on - for example,  "Who is the CEO of Google" - but as soon as you   need it to produce specific results based on  your product, results will be unpredictable,  
+3:41
+and often just wrong. GPT-3 is notorious for just  like confidently making up answers that are just  
+3:48
+plain wrong. One solution you might think would  be: "Well, can I just take my knowledge base and  
+3:53
+insert it into my prompt every single time before  I ask the question? That should give GPT-3 all the  
+3:58
+context it needs, right?" Yes, it will, but you're  probably not going to fit your entire knowledge   base in a single prompt—plus, that'd be pretty  expensive, because you are charged per token,  
+4:08
+where a token is approximately four characters  per English word—and your knowledge isn't going  
+4:13
+to fit into a prompt, because, at least  with OpenAI's latest language model today,   which is text-davinci-003, it has a token limit  of four thousand. So, you need to fit everything  
+4:23
+within that token limit. You also need to treat  each request as if it's a brand new context,   because it is—GPT-3 has no memory between  multiple requests. And, by the way, if you're  
+4:32
+thinking "Well, chatbot does, doesn't it? Like, if  I ask it multiple questions, it remembers what I  
+4:38
+said before," that's just little tricks that it  does—it's basically sending the entire multiple   messages as context every single time you ask a  new question. So, there are a couple different  
+Context injection
+4:50
+approaches to address this, but today we're going  to focus on a technique called context injection.   Context injection breaks the problem down into two  steps: Step one, based on the user's query that  
+5:02
+they send you, you first search your knowledge  base for the most relevant--Need some screen time?  
+5:09
+What do you have to say? Nothing? Change your  mind?--So, step one: based on the user's query,  
+5:14
+you search your knowledge base (whether it's a  database or whatever) for the most relevant pieces  
+5:19
+of information that relates to their query. So, if  for example the user is asking "How do I use React  
+5:25
+with Supabase," we first search our documentation  for only the most relevant pieces that talk about  
+5:30
+React. And then, step two: We inject the top most  relevant pieces into the actual prompt as context,  
+5:36
+followed by the user's query itself. So, this  approach, as opposed to something like fine-tuning  
+5:42
+(where you actually would need to retrain the  model itself with your own custom data), context   injection does two things for us: Number one, it  primes the prompt with very specific information  
+5:53
+that you want it to use within the answer--and  then two, it always uses up-to-date information  
+5:58
+right every single request every single query from  the user you would go and fetch that information  
+6:04
+from a database which can be updated in real time  right fine-tuning would require you to actually   retrain the model every single time you have a  new piece of information added to your knowledge  
+6:12
+base okay so back to this let's take a look at the  first pre-processing step and how we do that with  
+Pre-process MDX files
+6:18
+Supabase so open up our side view here under  the docs project we're going to head on down  
+6:23
+to scripts and check out our generate embeddings  script so before I can walk you through the script  
+6:29
+I need to First explain how all the documentation  on Supabase is actually built and stored within  
+6:36
+this project so first of all the documentation  is in fact all stored within git here that's not   stored in some external knowledge base or database  or whatever it is all within this project and it's  
+6:47
+stored as markdown files or specifically MDX files  and if you haven't heard of MDX files MDX files  
+6:54
+are basically marked down with JSX built in which  is pretty cool so you know everything you'd expect  
+7:00
+from a regular markdown file links whatever and  even things like this actual HTML tags this isn't  
+7:06
+part of MDX actually this is I believe this is  part of GitHub flavored markdown where it allows   you to to inject some HTML in there the part that  makes it MDX is something like this so admonition  
+7:17
+or let's see do we have anything else not in this  example other than down here you can see we can  
+7:22
+actually do exports as well as Imports at the  top right so these are things that you'd expect   with like JavaScript or JSX files specifically  something like this and we're basically merging  
+7:32
+markdown with that and for many of you I'm sure  you've seen this all the time pretty much every  
+7:38
+single open source project I've seen that has  documentation uses either markdown or MDX and  
+7:44
+the MDX gives you a little bit of benefits where  you can have some custom nice geared looking   components within your documentation without  having to like jump ship from markdown entirely  
+7:54
+and do the entire thing within pure JSX so pretty  awesome so if you take a look here pretty much our  
+8:00
+entire what Supabase calls their guides is broken  down into these markdown X Files and I can show  
+8:06
+you really quick how they map right so I'm on the  databases or the sorry the database MDX fall and   if I go over to their documentation subarus.com  docs they have a section here on database so slash  
+8:18
+guide database that basically Maps one to one to  this MDX page and as you can see every Supabased  
+8:23
+project comes with a full Postgres database uh we  get the exact same thing here so this is the the  
+8:28
+markdown converted to HTML there's entire next.js  pipeline that does this for us which is great so  
+8:34
+that's how this works under the hood our job now  is to basically as we said pre-process this right  
+8:39
+we need to take all of this content and store it  into our database now I know I haven't explained   exactly why we need to do that yet right I did  explain the whole context injection piece but I  
+8:49
+haven't explained quite yet why it's necessary to  actually put that in a database as a intermediary   step but just be patient we're going to get there  so back to generate embeddings essentially what  
+8:59
+this script does is this is kind of a script that  we run during CI continuous integration as a step  
+9:04
+that will basically anytime any new changes have  been made to the documentation it will it'll run  
+9:10
+on this script that will do the step that I'm  going to show you of walking through all the   different markdown files and pre-processing them  so all the magic happens here within our generate  
+9:20
+embeddings again I haven't explained to you what  an embedding is I'm going to get to that in just   a second I'm not going to go into every little  tiny little detail but I'm going to go over  
+9:28
+the high level in case you want to do something  similar you can follow along again this is all   open source so definitely reference this on your  own time but first things first we basically grab  
+9:38
+the content so literally a string of every single  one of these markdown or MDX files and we have a   handy function that we've created called walk that  will go through well Pages literally everything  
+9:47
+here is under Pages walk through each of them  recursively and grab all the different files  
+9:53
+that will give us a list of all the file names and  we're going to just do a little bit of filtering   such as only include the files that are MDX files  and ignore some specific files like 404 we don't  
+10:03
+really need to process that one and then we can  move on to the magic so basically we'll we Loop  
+10:09
+through every single markdown file and we need to  process it so let's talk about this processing why   why is this processing so necessary we have this  magic function which I can show you that basically  
+10:18
+processes the MDX content for search indexing  it extracts the metadata because our MDX files  
+10:23
+actually export submitted out of this important  similar to friend matter it strips it of all the  
+10:29
+JSX because later on when I feed this content to  our actual GPT-3 prompt I don't want it to get  
+10:35
+confused with the JSX so for now that's actually  just getting all stripped out and then it also   will actually split into some subsections and the  reason for that is because when we later inject  
+10:44
+this as context into the gp3 completion model it's  better if we can work in smaller chunk sizes right  
+10:50
+if we only have the ability to pass in context as  entire markdown files we're limited to just that  
+10:56
+markdown file all or nothing right if we split  that into multiple chunks then maybe when the  
+11:01
+user has a query about react this part of this  markdown file is most relevant along with this  
+11:07
+Chunk from this other markdown file right we can  combine those together as context so in general   this is the best practice recommended approach for  Supabase it's nothing too sophisticated basically  
+11:16
+we're breaking it down by a header so every time  it comes across a new markdown header H1 H2 or H3  
+11:22
+it will consider that a new section and split that  into its own chunk now you might be wondering how  
+11:27
+we're doing these things such as stripping the JSX  like are we actually you know going through this  
+11:33
+markdown and looking for uh JSX using I don't know  regex's or something like that how do we actually  
+11:39
+strip out just the JSX portions thankfully we're  not using regex for that we're actually getting  
+11:46
+a little bit low level and and processing the  markdown ourselves which is pretty fun actually  
+11:51
+um we're using the exact same tools that what  probably most all markdown tools are using which  
+11:56
+is tools provided by the unified platform  right unified unified JS these guys have  
+12:02
+done an amazing job of basically thinking about  every single possible component when it comes to   parsing and Abstract syntax trees so basically  taking things like markdown JavaScript files MDX  
+12:12
+files like many different types and creating this  really nice pipeline for processing them right so  
+12:17
+number one taking a markdown file for example  and breaking into what they're calling a syntax  
+12:23
+tree and from there you can actually go through  every element of that markdown file and do what   you want with it so there's extensions which is  where the MDX side comes in and we basically get  
+12:34
+our syntax tree filter out the GSX elements  and return that now worth doing it right now   the solution isn't perfect right what about all  the information that is within the JSX file are  
+12:44
+we going to lose that Yes actually right now we  do nothing to keep that so that's that's actually   a problem we are losing some information right  now this kind of like a version one broad stroke  
+12:54
+approach whereas in the future we'll definitely  need to take a little bit more fine grained and   find a way to actually abstract meaningful content  from JSX so again why did we do all this work why  
+13:05
+do we even need to process in the first place and  why are we supposedly storing this in the date  
+13:10
+so I think now's the time to talk about  embeddings and basically the fact that we're  
+13:16
+going to use embeddings to solve this problem  is what requires us to use a database which  
+13:22
+actually isn't necessarily a bad thing. This is  somewhat cutting edge actually (when it comes to   the ability to do this on Postgres). So let's take  a look so I'm going to skip a little bit here this  
+13:30
+is just a bunch of pre-checks I'm going to explain  the database in a second but down here we're going   to get right into the embedding portion so what  is an embedding I told you earlier that we'll be  
+Embeddings
+13:41
+injecting the most relevant pieces of information  into the prompt but how do we actually decide   which information is most relevant introducing  embeddings embeddings take a piece of text and  
+13:51
+spits out a vector or list of floating Point  numbers how is this useful well this Vector  
+13:56
+of floats is actually storing very meaningful  information let's pretend I have three phrases  
+14:02
+number one the Cat chases a mouse number two the  kitten hunts rodents and number three I like ham  
+14:09
+sandwiches your job is to group phrase does it  have similar meaning and to do this I'm going   to ask you to plot them onto a chart where the  most similar phrases are plotted together and  
+14:20
+the ones that are most dissimilar are are far  apart when you're done it might look something   like this phrases one and two of course will be  plotted close to each other since their meanings  
+14:30
+are similar note though that they didn't actually  share any similar vocabulary more so just they had  
+14:36
+similar meaning right and that's important and  then we'd expect phrase three to live somewhere   far away since it isn't related at all and then  let's say we had a fourth phrase Sally a Swiss  
+14:46
+cheese perhaps that might exist somewhere between  phase three because cheese can go on sandwiches  
+14:51
+and phrase one because mice like swiss cheese  so the coordinates of these dots on the chart  
+14:57
+represents the embedding right in this example  we only have two Dimensions X and Y but these  
+15:02
+two Dimensions represent an embedding for these  phrases now in reality we're going to need way   more Dimensions than two to make this effective  so how would we generate embed settings on our  
+15:11
+knowledge base well it turns out OpenAI also  has an API for exactly that they have another  
+15:17
+model which today is called text embedding Ada 2  that's purpose is to generate embedding vectors  
+15:23
+for pieces of text compared to our example which  had two Dimensions these embeddings will have 1536  
+15:30
+Dimensions okay great so we take our documentation  generate some embeddings for them and then we go  
+15:36
+and store them in a database what database are  we going to use to store them in by the way   since we're building this platform for Supabase  what better platform to use as our database than  
+Storing in Postgres + pgvector
+15:45
+Supabase itself now if you're following along and  you don't want to use Supabase that's okay the key   components we're using here are Postgres and the  pgvector extension for Postgres so that's all you  
+15:55
+really need to get this working it just so happens  that Supabase has this extension along with many  
+16:00
+others built right into their Postgres image and  it's open source so you can run it locally how   do we store the embeddings in the database by the  way this is where pgvector comes in pgvector is a  
+16:09
+vector tool for or Postgres it provides a new data  type called you guessed it Vector that's perfect  
+16:15
+for story embeddings in a column but not only  that we can also use pgvector to compare multiple  
+16:22
+vectors with each other to see how similar  they are this is where the magic happens if   we have a database full of content with their  embeddings then when the user sends us a query  
+16:31
+all we need to do is first generate embeddings  for the query itself so for example if the user  
+16:36
+asks does Supabase work with react then that  phrase itself we're actually going to generate   an embedding on and then number two we're going  to perform a similarity search on our database  
+16:46
+for the embeddings that are most similar to that  query and since we've already done the hard work   of pre-generating the embeddings on the entire  knowledge base this is super trivial to look  
+16:56
+up this information if you're not familiar with  linear algebra Theory the most common operations   to calculate similarity are cosine similarity dot  product and euclidean distance and pgvector can do  
+17:08
+all three of these in the case of OpenAI specific  typically the embeddings they generate are   normalized which means cosine similarity and Dot  product will actually produce identical results  
+17:17
+by the way I always want to give credit where  credit is due I just want to recognize Andrew   Kane for building the pgvector extension this is  an amazing extension that I think is more relevant  
+17:27
+than ever today and in the bit of interaction  I've had Andrew's been always super responsive and  
+17:32
+really great at keeping the extension up to date  also worth noting there is another extension for   Postgres called Cube that is somewhat similar but  unfortunately it maxes out at 100 Dimensions which  
+17:41
+won't help us today and there hasn't been a whole  lot of maintenance on that in the last couple  
+17:46
+years all right so back here practically how are  we storing these embeddings in our database so  
+17:53
+again since we're using Supabase as our database  which is Postgres under the hood literally it's as  
+17:58
+simple as just using their supervised client which  comes from their Supabase JS library and then kind  
+18:05
+of like a query Builder you can literally just use  their API to insert your data right then and there   and embedding specific quickly when they come back  from OpenAI's API in JavaScript they'll just show  
+18:15
+up as literally an array of numbers and turns out  you can actually just pass this array of numbers   directly into their query Builder client and it  will happily store those as proper vectors in the  
+18:26
+database under the hood speaking of the database  and the tables there let's take a quick look at   that I do have a migration file here it's just  under in from the root of the projects Supabase if  
+18:35
+you have a a local Supabase project typically it  will create a Supabase folder within your project  
+18:41
+and then within that is where you'd actually  configure the project and create things like   migrations as well as like Edge functions Etc  so if we take a look at our migrations we have  
+18:51
+for Supabase we're calling them pages and Page  sections why do we have two different tables well  
+18:56
+because of what I was telling you guys earlier we  are splitting our markdown pages into subsections   for a better context injection so each page  section would be a chunk of that page but I  
+19:06
+still want to keep track of the pages themselves  so that we can record for example the path of of   that page some of the metadata on that page and  then we can link the two together through foreign  
+19:16
+keys so to actually use pgvector you will need to  after installing on your days you'll actually need  
+19:21
+to call this line of code if you haven't already  which is basically tells Postgres to create this   extension in this case if it doesn't not exist  Vector pgvector just shows up as Vector within  
+19:31
+Postgres so that's the word we use here we create  our page table nothing too fancy about this and  
+19:36
+then our page section also pretty standard other  than this last line here so we create a column  
+19:42
+the name of the column is embedding right this  is arbitrary we've got to call this whatever we   wanted by embedding I think matches its purpose  best followed by this brand new data type called  
+19:51
+Vector given to us by pgvector extension and then  the size of that Vector represents the number of  
+19:57
+Dimensions so once again OpenAI is going to return  1536 Dimensions so that's going to be the size of  
+20:03
+our embedding Vector so pretty straightforward  back to our code when you're using the Supabase   client you literally just reference each of the  columns within a regular old JavaScript object  
+20:13
+and pass it the information there now fun fact  right now we're using this just within a script   on CI but you can actually use the Supabase  client on your browser client front end to  
+20:24
+access your database I mean that's one of the  key features here and how you use Supabase and   if you're like me and thinking what the heck how  how is that security going to work there's no way  
+20:34
+I want to expose all the tables my database to  be arbitrarily queried from my front end right  
+20:39
+it just feels wrong but basically this client  is built on PostgREST. For those who haven't  
+20:44
+heard PostgREST is a REST API layer on top of  Postgres that essentially will build a rest API  
+20:51
+dynamically based on the tables and columns Etc  that you have on your database which is pretty  
+20:58
+amazing and then again if you're like me worried  about security don't worry that's all covered here  
+21:03
+like most applications nowadays it uses JWTs and  you actually have access to that JWT and who the  
+21:09
+current user is within Postgres itself now so  basically we're just moving the authentication  
+21:14
+and authorization logic from your own custom  application API layer directly into Postgres and  
+21:20
+understandably super race is a sponsor of this  as this is pretty core to their product so I'm   going to leave it right there it almost went down  a whole nother Rabbit Hole there caught myself if  
+21:28
+you guys are interested in learning more about  Postgres definitely let me know and we can maybe   include that in another video by the way Supabase  also has a GraphQL extension so similar to the  
+21:38
+Postgres you can actually query it using GraphQL  some pretty powerful stuff there okay so at this  
+21:43
+point we've basically fully covered the whole  ingestion process embedding generation process  
+21:48
+how we design our database how we store them in  the database how we're inserting them into the  
+21:54
+database so now let's actually get into probably  the funnest part of this all which is the actual   prompt itself and the injection by the way  there's a whole bunch of other code in here  
+22:03
+and I'm intentionally just skipping all this this  is just a bunch of checks we have a check some   currently on each document just so that we're not  regenerating embeddings every single time if they  
+22:13
+haven't changed it's just kind of an optimization  to only regenerate embeddings on pages that have  
+22:18
+changed and so there's a whole bunch of extra  logic around that so to do the completion we do   have a back-end API route that we've created since  we are using Supabase for this naturally we used a  
+API endpoint (edge function)
+22:31
+Supabase Edge Function I'm going to stop myself  before I go down a huge rabbit hole into Edge   functions basically it's a serverless function  so super super common these days available on  
+22:41
+many different platforms and Supabase has their  own version fun fact Supabase's Edge functions  
+22:47
+use Deno under the hood which is kind of like a  newer alternative to Node.js built by actually the  
+22:53
+same original Creator as Node.js when he decided  there's lots of improvements that he wish he did   and that's what Deno is so if you've never used  Deno before very similar syntax to what you do  
+23:03
+in Node.js just with a couple changes especially  around Imports and environment variables but let's   scroll down to the meat of this Edge function  first thing we do is OpenAI actually has a  
+23:14
+moderation endpoint as part of their terms and  conditions they actually do require you to make   sure that the content that you're sending in  complies to their guidelines so like no hate  
+23:23
+language stuff like that and since we're letting  users dynamically put anything they want into this   we need to run it through their moderation API  which is free if it passes that we come down we  
+23:33
+create the embedding remember we need to create  a one-time embedding every single request on just  
+23:38
+the query itself right we need this embedding so  we can use that to find the most similar content   from our database and I'll show you how that  similarity function works and I'll show you  
+Calculating similarity in pgvector
+23:48
+that right now because that's next a couple ways  we could have gone about this number one way would   be if I was actually just using a pure Postgres  SQL client which you can do by the way when you  
+23:56
+use Supabase you're not locked in to just using  their libraries they actually expose the Postgres  
+24:02
+database externally so you can connect directly to  it from your back end so we could have done that   and then just wrote some raw SQL or use something  like connects JS to to write our query but instead  
+24:13
+just to keep things a little bit simpler we're  going to continue to use Supabase's JavaScript   library and they have a special function called  RPC which essentially allows you to to call a  
+24:23
+Postgres function right so for those who don't  know Postgres itself is actually able to have   functions which I can show you right now so  basically we're going to create a function  
+24:30
+called match page sections and it's going to  have a couple different parameters for it and the  
+24:36
+way we design this function it's going to return  basically all the page sections that are relevant   right in this case only give me the top 10 best  page sections that relate to the the user's query  
+24:46
+so this functions in a second migration here and  we call the function match page sections this  
+24:51
+is how you would design a function in Postgres  essentially what we're doing here is it's just a   simple select query where we're returning in this  case we're doing a couple things since we have  
+25:01
+this relationship between the page section and the  actual page itself we're joining those tables just  
+25:06
+so that we return the path and that path is  going to be useful down the road when we want   actually provide links back to this content  we're also returning the content itself the most  
+25:15
+important thing here so that we can inject that  into our prompt and then we're actually also just   returning the similarity so how similar this piece  of content was to the original query and we're  
+25:25
+getting that from this operation right here as we  briefly talked about earlier pgvector provides us  
+25:31
+a couple new operators this specific one is the  inner product operator and it's actually negative  
+25:37
+by default just the way that Postgres works it's  limited to sorting the result of this operator   ascending only so the Assumption when pgvector  was created is that well if if it's only going  
+25:48
+to return it in ascending order we need to negate  the inner product so that the most relevant ones  
+25:54
+come first assuming that we're trying to match for  the most relevant right so here to get the actual   similarity we're just multiplying by negative one  by the time it gets returned back to whoever is  
+26:02
+calling this function we also just have a handy  parameter called match threshold that you can use   to actually filter the results to only include  page sections that are at least above a certain  
+26:12
+threshold of course we need to order by the  similarity there and then limit it by this match   count which we're also passing as a parameter so  hopefully that's pretty straightforward side note  
+26:21
+here I had to throw that in this variable conflict  use variable all this means is since we're reusing   the word embedding as a parameter variable but  also as a column on the page sections by default  
+26:32
+Postgres will consider that a conflict so I'm  basically saying hey if you just see embedding   myself assume it's a variable otherwise if I'm  explicitly prefixing the table then of course  
+26:41
+that would be the table so if you're wondering  why that's there that's that's what that's all   about so since we've kind of hidden all that fancy  logic into a Postgres function again back here we  
+26:50
+can just use the superace client to do an RPC RPC  it will look for exactly that Postgres functions  
+26:55
+we pass it in the name with these parameters  again we can just pass the resulting embedding  
+27:01
+directly into this function and it will work  and the result will be our page sections and   now's the fun part now is when we're actually  going to take this content and inject it into  
+27:08
+our prompt and we're going to talk about the  prompts self this part I'm going to Breeze over   real quick GPT-3 tokenizer this is coming from  another library that will basically tokenize our  
+27:18
+content I told you earlier that when it comes to  GPT-3 everything is token based and in the English  
+27:24
+language every four characters approximately is  a token not a hard rule of thumb but you know if  
+27:29
+you had to generalize but if we can actually  calculate the real number of tokens and that   can actually be quite helpful here and so we're  actually doing that here we're actually taking all  
+27:37
+the content and parsing out the tokens from them  and then calculating the size and the reason why   we do that is just so that we can limit the number  of tokens in this query right number one we have  
+27:46
+to limit ourselves to be within that 4000 token  limit and this also just gives us the opportunity   to kind of fine tune how much context we actually  want to pass in in the first place okay next here  
+Prompt engineering
+27:55
+we have the prompt itself so first thing I want to  mention is this is literally as simple as it gets   no fancy templating language uh literally this  is just a JavaScript template literal and we're  
+28:06
+just passing in our template variables directly  here the indentation look weird just because we   don't want tabs at the beginning fun fact if you  wanted there's a library called common tags that  
+28:18
+uh actually give you some really nice template  literal tag functions and some of those can do  
+28:23
+like stripped indentations so if we really wanted  to we could have used that to still indent this   nicely and it would strip them not going to go  down that rabbit hole right now but just a fun  
+28:31
+fact so let's talk about this prompt what I want  to cover with you guys is just a little bit of   prompt engineering best practices and and kind of  the reason why I engineered The Prompt in this way  
+28:42
+and the best way to visualize this is probably if  I copy this into another tool called prmpts.ai.  
+28:47
+Full disclaimer this is a tool that I'm working  on. You can think of prmpts.ai as the JSFiddle  
+28:52
+or the CodeSandbox of prompt engineering. So you  can come in here and create your own prompt with  
+28:58
+placeholders inputs test it out and actually save  it for later and share the link with people and  
+29:04
+the aim is to be a platform where we can all  collaborate together on our prompts lots of   features planned right now it's just simple  freeform text input but we're going to add  
+29:12
+different schema types there and even the ability  to use embeddings themselves the ability to test  
+29:19
+a prompt and save those tests Etc but let's stay  focused so I'm going to replace this prompt with  
+29:24
+the one that is copied from the clipboard  placeholders here are just done using two   curly braces so let me just up that and there's  our prompt so let's figure this out loud you are  
+29:34
+a very enthusiastic Supabase representative  who loves to help people given the following   sections from the Supabase documentation answer  the question using only that information output it  
+29:44
+in markdown format if you're unsure and the answer  is not explicitly written in the documentation say   sorry I don't know how to help with that and then  we have this label we're calling context sections  
+29:54
+followed by a placeholder for the context text  and then we have the question itself so we have  
+30:00
+a label for that followed by placeholder for that  and then we finish this off by saying answer as   marked down including related code Snippets  if available and then we have the completion  
+30:08
+which completion just marks where the GPT-3 will  complete this prompt so down here we can actually   type in our input so if I actually took real  context from the documentation this is where I'd  
+30:19
+paste that of course we're not manually doing this  all of our code back here it as we just described  
+30:25
+is dynamically fetching those pieces from the  database using embeddings that's the whole point   of this and then it's injecting that dynamically  there but you can imagine that's what that's for  
+30:33
+and then this is the sanitized query I think we  sanitize the query just by take a look right right  
+30:39
+now we're just trimming it so very basic trimming  the white space from the ends of it but this this   is likely to get more sophisticated down the road  so here you can visualize right let's just pretend  
+30:48
+there's a piece of documentation that said well  let's not pretend let's actually check out the   real Docs okay so I'm on the pg_cron docs PG  KRON is an extension for Postgres built into  
+30:57
+Supabase that allows you to do current jobs so  here's an example of code snippet right so let's   pretend that you know the user asked a question  like how do I create a chrome right and with our  
+31:09
+embedding saved in Postgres let's say that our  algorithm came up with this code snippet likely  
+31:15
+it's going to come up with a bunch of these  but for now we'll keep it simple came up with   this code snippet and maybe that text on how  to in this case "Delete a cron" -- well okay  
+31:24
+let's do "Run a cron" - maybe that's a bit more  practical. Copy that and it gets pasted in here   it's we actually do keep the markdown formatting  and actually speaking of markdown turns out GPT-3  
+31:34
+is really good at both understanding markdown  and actually creating markdown too and you'll  
+31:40
+see a little bit later but this is basically how  we're able to produce these really high quality   responses that look really nice is because we're  actually getting GPT-3 to Output markdown itself  
+31:50
+that we can display nicely using a markdown render  so back here we artificially add that back in this  
+31:55
+would be a SQL code snippet written in markdown so  this is how it would actually get injected right  
+32:01
+in again with some other sections we'd be able  to fit more than just that in there so if we fill  
+32:07
+in those inputs we can visualize how the problem  will actually get sent to the completion API down   here you can just adjust which family and model  is being used DaVinci 3 as we talked about is  
+32:17
+the latest today as more models come out we'll  be able to use those or as more families come  
+32:23
+out from different organizations we can test out  you know different models let's go ahead and run   this and there's a response right you can create a  Quran using the Quran schedule method such as the  
+32:31
+one below it's actually outputting markdown once  again in this case I think it almost basically  
+32:37
+just copied that one directly but check this out  this cron sets a daily recurring job called vacuum   at 3am GMT each day based on that now notice  we didn't actually talk about that so this  
+32:47
+is where the actual generative language model is  becoming very powerful right it's doing some extra   explanation that is very useful here and it just  deduced this on its own so at this point we would  
+32:57
+take this completion and return this back from  our Edge Function to our end user and since it   is spitting out markdown right as we talked about  now anywhere we have marked down like the inline  
+33:06
+snippet there or the multi-line snippet there  we can actually now run that through a markdown  
+33:12
+renderer and get some really nice looking results  so before we finish the video where I'll quickly   show you the front end side of all this let's just  quickly break down this prompt and talk about some  
+Prompt best practices
+33:22
+of the components and why I chose to build them  that way now disclaimer here prompt engineering is   an emerging field so some of these best practices  are guaranteed to change and improve over time but  
+33:33
+for now this is kind of the aggregation of some of  the recommended approaches today so first thing we   do here is we actually give the model A identity  right you are very enthusiastic Supabased model  
+33:42
+who loves to help people what does identity do  well it's priming the model so that it understands   its purpose prior to us giving it a task by saying  very enthusiastic we're hoping that this will help  
+33:53
+at least at a minimum make the model as cheerful  as possible use exclamation marks things like that  
+33:59
+you know when it makes sense to also by saying  this is a Supabase representative now any kind   of possible query that the user sends the answer  provided will always be within the context that  
+34:09
+it was created from a Supabased representative  right so after identity we go into task right  
+34:15
+given the following sections from the Supabased  documentation answer the question using only that   information outputted in markdown format so this  part is very important it's the instructions for  
+34:25
+the prompt this is what I'm asking you to do  we want to improve the likelihood that we get   the kind of result that we want this next part  here is what I'm going to call a condition so if  
+34:34
+you are unsure and the answer is not explicitly  written in the documentation say sorry I don't   know how to help with that right without this  section this is where we are in danger of GPT-3  
+34:44
+hallucinating hallucinating is a term we use when  gp3 makes stuff up and as we already talked about  
+34:51
+gbd3 is notorious for just like confidently be  giving you the wrong answer especially when it  
+34:57
+comes to math I found right it's a language model  after all so any kind of like math operation it's  
+35:03
+not amazing at but it will confidently very very  confidently tell you that it thinks it knows the  
+35:08
+answer you can even give it a math equation ask  it for an answer and then also ask it for like   its confidence level one to ten how confident  are you that this sounds correct and then it  
+35:17
+will proceed to give you like the wrong answer and  then 10 out of 10 confident which is hilarious so  
+35:23
+when you're creating a prompt for your own custom  application that's going to represent your product  
+35:29
+to end users you want to make sure that you have  a condition in there to prevent the model from  
+35:34
+saying something you don't want it to say about  your product or just making something up entirely   which are both bad things next we have the context  so I would call this part of the prompt literally  
+35:44
+the context itself this could either be manually  entered in or in our case dynamically injected  
+35:49
+again this practice is called context injection  but it is just another input after all the thing   right above it we're calling labels right labels  help give the prompt structure so not only have we  
+35:59
+given it a task but now we're reinforcing that  task by saying here's the context that I told  
+36:04
+you I was going to give you so label context  and then here is a question that I told you I  
+36:11
+was going to give you question followed by the  query now what's with these triple quotes this   is something that is recommended just to make it  very explicit to the model what your question is  
+36:21
+right now OpenAI has recommended something like  three quotations triple quotes to do that and  
+36:27
+the other thing this does too is potentially can  help with prompt injection as well so if people  
+36:32
+try to start to ask this prompt to do something  that's outside of the scope of what you want to   do in this case if they're trying to ask Supabase  to answer something that's outside of the scope  
+36:41
+of something related to Supabase keeping it within  these trivial quotes can at least at a very basic  
+36:47
+level help with that and then finally at the end  here we have our final label which we're calling   answer so answer as markdown so again reinforcing  that we really want this answer to be formatted  
+36:56
+as markdown which in my experience has done a  very great job of doing and then this was added   on later "include related to code snippets  when available". For Supabase specifically,  
+37:04
+code Snippets and examples are some of the most  useful things in their documentation so we just  
+37:11
+wanted to give it a little bit of help a little  bit of that extra hint to you know if the context   that we injected here had any kind of relevant  code snippet to their query include that if  
+37:20
+possible because we encounter certain situations  where they were available but GPT-3 just decided   not to include those so things like this are just  little hints you can do to help coerce the model  
+37:30
+to give you something a little bit closer to what  you're looking for I did write a blog article on   all this stuff I could throw that in the in  the video description if that's helpful feel  
+37:39
+free to check it out basically just what is prompt  engineering it goes into some of these things and   lets you actually try out a couple of the examples  in the playground here so prompt has been covered  
+37:47
+now what's the last step we're just using OpenAI's  library again to call the completion endpoint  
+37:53
+passing in the model this prompt that we've  crafted the maximum number of tokens it should   respond with which you can control and in this  case we set the temperature as well I'm not going  
+38:03
+to go super deep into temperature but think of  temperature as how deterministic you want the   answer to be so temperature of zero means given  the exact same prompt multiple times it will  
+38:13
+produce the identical response each time whereas  any temperature of greater than zero the higher  
+38:18
+you go the more varied that response will be and  depending on the situation sometimes that variance   is good in our situation we prefer to keep the  responses consistent if the query was consistent  
+38:28
+setting the temperature to zero also helps when  you're testing different scenarios it makes it   a little bit easier to help craft and cater your  prompt and then at the very end we're returning  
+38:36
+it back to the user so this video would not be  complete without me showing you the end result so   let's take a look so here we have it guys we have  our good friend Clippy in the bottom right hand  
+Demo time!
+38:45
+corner here something I want to note is the user  interface that I'm showing you right now is almost   guaranteed to change and improve over time I've  been working with some very talented designers and  
+38:56
+front-end developers at Supabase and they're just  doing an amazing job of making this thing look   awesome oh and by the way I want to mention for  some of my followers a lot of you guys watch my  
+39:05
+blender videos so I just had to mention uh Clippy  was in fact made in blender so here he is just  
+39:10
+whipped up a little model of him of course with  a Supabase customization there super fun building   and animating him but back to this let's show this  thing off so first things first we can click on  
+39:19
+Clippy's Bubble there and like we talked about the  whole idea is we can simply use natural language   to ask in this case Clippy anything we want and  ideally it will respond right then and there  
+39:30
+like ChatGPT would but cater to bibo Supabase and  now that you know how the entire thing works in  
+39:35
+the back end let's take a look so let's start  off with a simple one how do I run migrations   and okay check it out you can run migrations by  using Supabase's CLI so Supabase migration new  
+39:46
+new employee for example and it walks you through  those steps of course it's using markdown Snippets  
+39:51
+here this fully integrates with Supabase's  existing markdown styling and components and  
+39:58
+even links will work here as well when you click  them go straight to the documentation so another   thing you can do which is quite powerful now  that we have a generative language model is  
+40:05
+give it something a little bit custom right so  for example if I said how do I create a migration  
+40:11
+called sandwich table assuming that I wanted  to create a migration to create a table about  
+40:17
+sandwiches let's see what it says all right check  it out so we got something similar but this time   we have sandwich table placed everywhere instead  and even gave us a sample um sandwich table which  
+40:28
+is kind of neat what else can we do what if we  said how do JWTs work in Postgres so there we  
+40:35
+go it talks about how super race creates users in  Postgres how it will return to JWT when it creates  
+40:41
+the user for the first time etc etc so once again  under the hood what happened here is we took this  
+40:46
+query generated an embedding on it it searched  our entire database which is pre-processed with  
+40:52
+all the documentation from Supabase with an  embedding that matches this query it found the  
+40:57
+top most relevant chunks of content to this query  and then inserted that into our prompt as context  
+41:03
+followed by this query itself and we basically  let GPT-3 do the rest and use that context to  
+41:09
+give us a catered answer right here let's do one  more does this work with Next.js and there we go  
+41:17
+yes this works with next.js so potentially that  enthusiastic part of the prompt is contributing  
+41:23
+here and then it goes to talk about the Supabase  auth helpers and they have a specific one for   Next.js which you can even copy the install  command rate then and there. Pretty awesome!
+Thanks for watching!
+41:32
+So that's it for today. Thanks for following  along! I also want to mention that it's been   an absolute pleasure working with the Supabase  team. Props to Paul and Ant and the entire team  
+41:40
+there for building a great product. I love  how just everyone on the team jumps in and   helps out where they can and it's made a  project like this really enjoyable to work  
+41:47
+on. Thanks so much for watching today guys and  I hope to catch you down the next rabbit hole!
+
